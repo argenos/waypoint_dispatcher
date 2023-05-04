@@ -1,0 +1,9 @@
+# goal
+geometry_msgs/PoseStamped[] target_poses
+---
+# result
+actionlib_msgs/GoalStatusArray goal_status
+
+---
+# feedback
+actionlib_msgs/GoalStatusArray goal_status

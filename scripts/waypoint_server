@@ -1,0 +1,233 @@
+#! /usr/bin/env python3
+
+import rospy
+
+import actionlib
+
+from actionlib_msgs.msg import GoalStatus, GoalStatusArray
+from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
+from nav_msgs.srv import GetPlan
+from nav_msgs.msg import Path
+from waypoint_dispatcher.msg import (
+    FollowWaypointsFeedback,
+    FollowWaypointsResult,
+    FollowWaypointsAction,
+)
+from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped
+from visualization_msgs.msg import Marker
+from std_msgs.msg import ColorRGBA
+
+
+class FollowWaypointsServer:
+    # create messages that are used to publish feedback/result
+
+    def __init__(self, name):
+        self._action_name = name
+        self._as = actionlib.SimpleActionServer(
+            self._action_name,
+            FollowWaypointsAction,
+            execute_cb=self.execute_cb,
+            auto_start=False,
+        )
+
+        self._feedback = FollowWaypointsFeedback()
+        self._result = FollowWaypointsResult()
+
+        self.move_base = actionlib.SimpleActionClient("move_base", MoveBaseAction)
+        self.make_plan_server = rospy.ServiceProxy("move_base/make_plan", GetPlan)
+
+        self.path_pub = rospy.Publisher("move_base_path", Path, queue_size=10)
+        # Define a marker publisher.
+        self.marker_pub = rospy.Publisher("waypoint_markers", Marker, queue_size=10)
+
+        self.current_pose = PoseWithCovarianceStamped()
+        rospy.Subscriber(
+            "amcl_pose", PoseWithCovarianceStamped, self.current_pose_callback
+        )
+
+        self.path_tolerance = rospy.get_param(
+            "/move_base/TebLocalPlannerROS/xy_goal_tolerance"
+        )
+
+        rospy.loginfo("Waiting for move_base server")
+        self.move_base.wait_for_server(rospy.Duration(60))
+
+        self._as.start()
+        rospy.loginfo("Ready!")
+
+    def execute_cb(self, goal):
+        # helper variables
+        r = rospy.Rate(1)
+        success = True
+
+        self.init_markers()
+
+        orange_color = {"r": 0.988, "g": 0.541, "b": 0.318, "a": 1.0}
+
+        marker_color = ColorRGBA(**orange_color)
+
+        for i, g in enumerate(goal.target_poses):
+            status = GoalStatus()
+            status.goal_id.id = "{}".format(i)
+            status.status = GoalStatus.PENDING
+            self._feedback.goal_status.status_list.append(status)
+            self.markers.points.append(g.pose.position)
+            self.markers.colors.append(marker_color)
+
+        self.marker_pub.publish(self.markers)
+
+        # Execute
+        for i, waypoint in enumerate(goal.target_poses):
+            # check that preempt has not been requested by the client
+            if self._as.is_preempt_requested():
+                rospy.loginfo("%s: Preempted" % self._action_name)
+                self._as.set_preempted()
+                self.update_goal_status(
+                    self._feedback.goal_status, GoalStatus.PREEMPTED, i
+                )
+                # self.update_markers(i, GoalStatus.PREEMPTED)
+                self._as.publish_feedback(self._feedback)
+                self.marker_pub.publish(self.markers)
+                # Is this correct?
+                success = False
+                break
+
+            # Change current goal status to active
+            rospy.loginfo("Executing next goal...")
+            self._feedback.goal_status.status_list[i].status = GoalStatus.ACTIVE
+            self._feedback.goal_status.header.stamp = rospy.Time.now()
+            self.update_markers(i, GoalStatus.ACTIVE)
+            self._as.publish_feedback(self._feedback)
+            self.marker_pub.publish(self.markers)
+
+            # Make move_base request
+            result = self.send_move_base_goal(waypoint)
+
+            # rospy.loginfo(result)
+
+            self._feedback.goal_status.status_list[i].status = result
+            self._feedback.goal_status.header.stamp = rospy.Time.now()
+            self.update_markers(i, result)
+
+            if result in [
+                GoalStatus.PREEMPTED,
+                GoalStatus.ABORTED,
+                GoalStatus.REJECTED,
+                GoalStatus.RECALLED,
+            ]:
+                # Abort the goals after the current one
+                self.update_goal_status(
+                    self._feedback.goal_status, GoalStatus.ABORTED, i + 1
+                )
+                self._as.publish_feedback(self._feedback)
+                self.marker_pub.publish(self.markers)
+
+                # Set the task as failed and exit the loop (do not execute them)
+                success = False
+                break
+
+            self._as.publish_feedback(self._feedback)
+            self.marker_pub.publish(self.markers)
+
+            r.sleep()
+
+        self._result.goal_status = self._feedback.goal_status
+        if success:
+            rospy.loginfo("%s: Succeeded" % self._action_name)
+            self._as.set_succeeded(self._result)
+
+    def send_move_base_goal(self, waypoint):
+
+        goal = MoveBaseGoal()
+        goal.target_pose.header.frame_id = "map"
+        goal.target_pose.header.stamp = rospy.Time.now()
+        goal.target_pose.pose = waypoint.pose
+
+        path = self.request_path_plan(goal.target_pose, self.path_tolerance)
+        self.path_pub.publish(path)
+
+        rospy.loginfo("Sending goal...")
+        self.move_base.send_goal(goal)
+
+        self.move_base.wait_for_result()
+        return self.move_base.get_state()
+
+    def update_goal_status(self, goals, status, start=0, end=None):
+        if end is None:
+            end = len(goals.status_list) + 1
+
+        for i in range(start, end):
+            goals.status_list[i].status = status
+            self.update_markers(i, status)
+
+    def update_markers(self, goal_index, status):
+        blue_color = {"r": 0.259, "g": 0.561, "b": 0.863, "a": 1.0}
+        green_color = {"r": 0.176, "g": 0.631, "b": 0.376, "a": 1.0}
+        red_color = {"r": 0.925, "g": 0.349, "b": 0.255, "a": 1.0}
+        grey_color = {"r": 0.537, "g": 0.533, "b": 0.553, "a": 1.0}
+        orange_color = {"r": 0.988, "g": 0.541, "b": 0.318, "a": 1.0}
+
+        if status == GoalStatus.SUCCEEDED:
+            marker_color = ColorRGBA(**green_color)
+        elif status == GoalStatus.PENDING:
+            marker_color = ColorRGBA(**orange_color)
+        elif status == GoalStatus.ACTIVE:
+            marker_color = ColorRGBA(**blue_color)
+        elif status == GoalStatus.ABORTED or status == GoalStatus.RECALLED:
+            marker_color = ColorRGBA(**grey_color)
+        elif status == GoalStatus.ABORTED or status == GoalStatus.PREEMPTED:
+            marker_color = ColorRGBA(**red_color)
+
+        self.markers.action = Marker.MODIFY
+        self.markers.header.stamp = rospy.Time.now()
+        self.markers.colors[goal_index] = marker_color
+
+    def request_path_plan(self, goal, tolerance):
+        rospy.wait_for_service("move_base/make_plan")
+        try:
+            start = PoseStamped()
+            current_pose = self.current_pose
+            start.pose = current_pose.pose.pose
+            start.header = current_pose.header
+            path = self.make_plan_server(start, goal, tolerance)
+            return path.plan
+        except rospy.ServiceException as e:
+            print("Service call failed: %s" % e)
+
+    def current_pose_callback(self, msg):
+        self.current_pose = msg
+
+    def init_markers(self):
+        # Taken from https://github.com/pirobot/ros-by-example/blob/master/rbx_vol_1/rbx1_nav/nodes/move_base_square.py
+        # Set up our waypoint markers
+        marker_scale = 0.2
+        marker_lifetime = 0  # 0 is forever
+        marker_ns = "waypoints"
+        marker_id = 0
+        # marker_color = {"r": 1.0, "g": 0.7, "b": 1.0, "a": 1.0}
+
+        # Initialize the marker points list.
+        self.markers = Marker()
+        self.markers.ns = marker_ns
+        self.markers.id = marker_id
+        self.markers.type = Marker.SPHERE_LIST
+        self.markers.action = Marker.ADD
+        self.markers.lifetime = rospy.Duration(marker_lifetime)
+        self.markers.scale.x = marker_scale
+        self.markers.scale.y = marker_scale
+        # self.markers.color.r = marker_color["r"]
+        # self.markers.color.g = marker_color["g"]
+        # self.markers.color.b = marker_color["b"]
+        # self.markers.color.a = marker_color["a"]
+
+        # self.markers.color = marker_color
+
+        self.markers.header.frame_id = "map"
+        self.markers.header.stamp = rospy.Time.now()
+        self.markers.points = list()
+
+
+if __name__ == "__main__":
+    rospy.init_node("waypoint_dispatcher")
+    server = FollowWaypointsServer(rospy.get_name())
+    rospy.spin()
