@@ -36,18 +36,17 @@ class FollowWaypointsServer:
         self.move_base = actionlib.SimpleActionClient("move_base", MoveBaseAction)
         self.make_plan_server = rospy.ServiceProxy("move_base/make_plan", GetPlan)
 
-        self.path_pub = rospy.Publisher("move_base_path", Path, queue_size=10)
-        # Define a marker publisher.
-        self.marker_pub = rospy.Publisher("waypoint_markers", Marker, queue_size=10)
-
         self.current_pose = PoseWithCovarianceStamped()
         rospy.Subscriber(
             "amcl_pose", PoseWithCovarianceStamped, self.current_pose_callback
         )
-
         self.path_tolerance = rospy.get_param(
-            "/move_base/TebLocalPlannerROS/xy_goal_tolerance"
+            "move_base/TebLocalPlannerROS/xy_goal_tolerance"
         )
+        self.path_pub = rospy.Publisher("move_base_planned_path", Path, queue_size=10)
+
+        # Define a marker publisher.
+        self.marker_pub = rospy.Publisher("waypoint_markers", Marker, queue_size=10)
 
         rospy.loginfo("Waiting for move_base server")
         self.move_base.wait_for_server(rospy.Duration(60))
@@ -108,6 +107,8 @@ class FollowWaypointsServer:
             self._feedback.goal_status.status_list[i].status = result
             self._feedback.goal_status.header.stamp = rospy.Time.now()
             self.update_markers(i, result)
+            self._as.publish_feedback(self._feedback)
+            self.marker_pub.publish(self.markers)
 
             if result in [
                 GoalStatus.PREEMPTED,
@@ -115,6 +116,8 @@ class FollowWaypointsServer:
                 GoalStatus.REJECTED,
                 GoalStatus.RECALLED,
             ]:
+                rospy.loginfo("Current goal index: {}".format(i))
+
                 # Abort the goals after the current one
                 self.update_goal_status(
                     self._feedback.goal_status, GoalStatus.ABORTED, i + 1
@@ -125,9 +128,6 @@ class FollowWaypointsServer:
                 # Set the task as failed and exit the loop (do not execute them)
                 success = False
                 break
-
-            self._as.publish_feedback(self._feedback)
-            self.marker_pub.publish(self.markers)
 
             r.sleep()
 
@@ -143,6 +143,7 @@ class FollowWaypointsServer:
         goal.target_pose.header.stamp = rospy.Time.now()
         goal.target_pose.pose = waypoint.pose
 
+        rospy.loginfo("Requesting plan to next waypoint")
         path = self.request_path_plan(goal.target_pose, self.path_tolerance)
         self.path_pub.publish(path)
 
@@ -154,9 +155,12 @@ class FollowWaypointsServer:
 
     def update_goal_status(self, goals, status, start=0, end=None):
         if end is None:
-            end = len(goals.status_list) + 1
+            end = len(goals.status_list)
+
+        rospy.loginfo("status: {}".format(len(goals.status_list)))
 
         for i in range(start, end):
+            rospy.loginfo("index: {}".format(i))
             goals.status_list[i].status = status
             self.update_markers(i, status)
 
