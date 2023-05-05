@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<launch>
+    <arg name="route_file" default="$(find waypoint_dispatcher)/config/route_2.yaml"/>
+    
+    <group ns="tiago1">
+        <include file="$(find waypoint_dispatcher)/launch/waypoint_client.launch">
+            <arg name="route_file"  value="$(arg route_file)"/>
+        </include>
+    </group>
+
+</launch>

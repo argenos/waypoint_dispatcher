@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+
+<launch>
+        
+    <node pkg="waypoint_dispatcher" type="waypoint_server" name="waypoint_dispatcher" output="screen">
+    </node>
+
+</launch>
