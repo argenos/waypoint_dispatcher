@@ -1,76 +1,9 @@
 #! /usr/bin/env python3
-
-from __future__ import print_function
-
 import sys
-import yaml
-
-from math import pi
 
 import rospy
 
-# Brings in the SimpleActionClient
-import actionlib
-
-# Brings in the messages used by the fibonacci action, including the
-# goal message and the result message.
-# import actionlib_tutorials.msg
-from waypoint_dispatcher.msg import FollowWaypointsAction, FollowWaypointsGoal
-from geometry_msgs.msg import Pose, Point, Quaternion, PoseStamped
-from tf.transformations import quaternion_from_euler
-
-
-def load_route(file_name):
-    with open(file_name, "r") as yaml_file:
-        file_contents = yaml.load(yaml_file, Loader=yaml.FullLoader)
-
-    return file_contents
-
-
-def waypoint_client():
-    # Creates the SimpleActionClient, passing the type of the action
-    # (FibonacciAction) to the constructor.
-    client = actionlib.SimpleActionClient("waypoint_dispatcher", FollowWaypointsAction)
-
-    # Waits until the action server has started up and started
-    # listening for goals.
-    rospy.loginfo("Waiting for waypoint_dispatcher server")
-    client.wait_for_server()
-
-    # waypoint_list = load_route(file_name)
-    rospy.loginfo("Loading route")
-    waypoint_list = load_route(rospy.get_param("~route_file"))
-    goal = create_goal(waypoint_list["waypoints"])
-
-    # Sends the goal to the action server.
-    rospy.loginfo("Sending route")
-    client.send_goal(goal)
-
-    # Waits for the server to finish performing the action.
-    client.wait_for_result()
-
-    # Prints out the result of executing the action
-    return client.get_result()
-
-
-def create_goal(waypoint_list):
-    # Creates a goal to send to the action server.
-    goal = FollowWaypointsGoal()
-    for w in waypoint_list:
-        pose = PoseStamped()
-
-        orientation = [w.get("roll", 0), w.get("pitch", 0), w.get("yaw", 0)]
-        orientation = [x * pi / 180.0 for x in orientation]
-        yaw_deg = quaternion_from_euler(*orientation, axes="sxyz")
-        q = Quaternion(*yaw_deg)
-        waypoint = Pose(Point(w["x"], w["y"], w.get("z", 0.0)), q)
-
-        pose.pose = waypoint
-
-        goal.target_poses.append(pose)
-
-    return goal
-
+from waypoint_dispatching.waypoint_client import waypoint_client
 
 if __name__ == "__main__":
 
