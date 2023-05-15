@@ -70,7 +70,8 @@ class FollowWaypointsServer:
 
         for i, g in enumerate(goal.target_poses):
             status = GoalStatus()
-            status.goal_id.id = "{}_w{}".format(rospy.get_name(), i)
+            status.goal_id.id = "{}-w{}".format(rospy.get_name(), i)
+            status.goal_id.stamp = rospy.Time().now()
             status.status = GoalStatus.PENDING
             self._feedback.goal_status.status_list.append(status)
             self.markers.points.append(g.pose.position)
@@ -80,6 +81,7 @@ class FollowWaypointsServer:
 
         # Execute
         for i, waypoint in enumerate(goal.target_poses):
+            status = self._feedback.goal_status.status_list[i]
             # check that preempt has not been requested by the client
             if self._as.is_preempt_requested():
                 rospy.loginfo("%s: Preempted" % self._action_name)
@@ -96,8 +98,10 @@ class FollowWaypointsServer:
 
             # Change current goal status to active
             rospy.loginfo("Executing next goal...")
+            stamp = rospy.Time.now()
             self._feedback.goal_status.status_list[i].status = GoalStatus.ACTIVE
-            self._feedback.goal_status.header.stamp = rospy.Time.now()
+            status.goal_id.stamp = stamp
+            self._feedback.goal_status.header.stamp = stamp
             self.update_markers(i, GoalStatus.ACTIVE)
             self._as.publish_feedback(self._feedback)
             self.marker_pub.publish(self.markers)
@@ -106,9 +110,10 @@ class FollowWaypointsServer:
             result = self.send_move_base_goal(waypoint)
 
             # rospy.loginfo(result)
-
+            stamp = rospy.Time.now()
             self._feedback.goal_status.status_list[i].status = result
-            self._feedback.goal_status.header.stamp = rospy.Time.now()
+            status.goal_id.stamp = stamp
+            self._feedback.goal_status.header.stamp = stamp
             self.update_markers(i, result)
             self._as.publish_feedback(self._feedback)
             self.marker_pub.publish(self.markers)
@@ -168,6 +173,7 @@ class FollowWaypointsServer:
 
         for i in range(start, end):
             rospy.loginfo("index: {}".format(i))
+            goals.status_list[i].goal_id.stamp = rospy.Time().now()
             goals.status_list[i].status = status
             self.update_markers(i, status)
 
