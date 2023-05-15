@@ -1,8 +1,11 @@
 <?xml version="1.0"?>
 
 <launch>
+
+    <arg name="frame" default="map"/>
         
     <node pkg="waypoint_dispatcher" type="waypoint_server" name="waypoint_dispatcher" output="screen">
+        <param name="frame" value="$(arg frame)"/>
     </node>
 
 </launch>

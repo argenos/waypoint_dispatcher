@@ -33,6 +33,9 @@ class FollowWaypointsServer:
         self._feedback = FollowWaypointsFeedback()
         self._result = FollowWaypointsResult()
 
+        self.frame = rospy.get_param("~frame", "map")
+        rospy.loginfo(self.frame)
+
         self.move_base = actionlib.SimpleActionClient("move_base", MoveBaseAction)
         self.make_plan_server = rospy.ServiceProxy("move_base/make_plan", GetPlan)
 
@@ -135,11 +138,14 @@ class FollowWaypointsServer:
         if success:
             rospy.loginfo("%s: Succeeded" % self._action_name)
             self._as.set_succeeded(self._result)
+        else:
+            rospy.loginfo("%s: Failed" % self._action_name)
+            self._as.set_aborted(self._result)
 
     def send_move_base_goal(self, waypoint):
 
         goal = MoveBaseGoal()
-        goal.target_pose.header.frame_id = "map"
+        goal.target_pose.header.frame_id = self.frame
         goal.target_pose.header.stamp = rospy.Time.now()
         goal.target_pose.pose = waypoint.pose
 
@@ -226,7 +232,7 @@ class FollowWaypointsServer:
 
         # self.markers.color = marker_color
 
-        self.markers.header.frame_id = "map"
+        self.markers.header.frame_id = self.frame
         self.markers.header.stamp = rospy.Time.now()
         self.markers.points = list()
 
