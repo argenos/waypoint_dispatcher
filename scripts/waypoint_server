@@ -68,19 +68,20 @@ class FollowWaypointsServer:
 
         marker_color = ColorRGBA(**orange_color)
 
-        for i, g in enumerate(goal.target_poses):
+        for i, g in enumerate(goal.goal):
             status = GoalStatus()
-            status.goal_id.id = "{}-w{}".format(rospy.get_name(), i)
+            # status.goal_id.id = "{}-w{}".format(rospy.get_name(), i)
+            status.goal_id.id = g.goal_id.id
             status.goal_id.stamp = rospy.Time().now()
             status.status = GoalStatus.PENDING
             self._feedback.goal_status.status_list.append(status)
-            self.markers.points.append(g.pose.position)
+            self.markers.points.append(g.goal.target_pose.pose.position)
             self.markers.colors.append(marker_color)
 
         self.marker_pub.publish(self.markers)
 
         # Execute
-        for i, waypoint in enumerate(goal.target_poses):
+        for i, waypoint in enumerate(goal.goal):
             status = self._feedback.goal_status.status_list[i]
             # check that preempt has not been requested by the client
             if self._as.is_preempt_requested():
@@ -107,7 +108,7 @@ class FollowWaypointsServer:
             self.marker_pub.publish(self.markers)
 
             # Make move_base request
-            result = self.send_move_base_goal(waypoint)
+            result = self.send_move_base_goal(waypoint.goal)
 
             # rospy.loginfo(result)
             stamp = rospy.Time.now()
@@ -153,7 +154,7 @@ class FollowWaypointsServer:
         goal = MoveBaseGoal()
         goal.target_pose.header.frame_id = self.frame
         goal.target_pose.header.stamp = rospy.Time.now()
-        goal.target_pose.pose = waypoint.pose
+        goal.target_pose.pose = waypoint.target_pose.pose
 
         rospy.loginfo("Requesting plan to next waypoint")
         path = self.request_path_plan(goal.target_pose, self.path_tolerance)

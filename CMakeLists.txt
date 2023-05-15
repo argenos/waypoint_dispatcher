@@ -10,6 +10,8 @@ project(waypoint_dispatcher)
 find_package(catkin REQUIRED COMPONENTS
   move_base
   actionlib
+  actionlib_msgs
+  move_base_msgs
   message_generation
   rospy
 )
@@ -76,6 +78,7 @@ generate_messages(
   actionlib_msgs
   std_msgs
   geometry_msgs
+  move_base_msgs
 )
 
 ################################################

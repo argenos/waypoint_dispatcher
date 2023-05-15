@@ -7,6 +7,7 @@ from math import pi
 import rospy
 import actionlib
 from geometry_msgs.msg import Pose, Point, Quaternion, PoseStamped
+from move_base_msgs.msg import MoveBaseActionGoal
 from tf.transformations import quaternion_from_euler
 
 from waypoint_dispatcher.msg import FollowWaypointsAction, FollowWaypointsGoal
@@ -60,6 +61,7 @@ def create_goal(waypoint_list):
     goal = FollowWaypointsGoal()
     for w in waypoint_list:
         pose = PoseStamped()
+        g = MoveBaseActionGoal()
 
         orientation = [w.get("roll", 0), w.get("pitch", 0), w.get("yaw", 0)]
         orientation = [x * pi / 180.0 for x in orientation]
@@ -69,6 +71,8 @@ def create_goal(waypoint_list):
 
         pose.pose = waypoint
 
-        goal.target_poses.append(pose)
+        g.goal.target_pose = pose
+
+        goal.goal.append(g)
 
     return goal
