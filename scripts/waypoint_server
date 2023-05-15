@@ -46,10 +46,10 @@ class FollowWaypointsServer:
         self.path_tolerance = rospy.get_param(
             "move_base/TebLocalPlannerROS/xy_goal_tolerance"
         )
-        self.path_pub = rospy.Publisher("move_base_planned_path", Path, queue_size=10)
+        self.path_pub = rospy.Publisher("move_base_planned_path", Path, queue_size=10, latch=True)
 
         # Define a marker publisher.
-        self.marker_pub = rospy.Publisher("waypoint_markers", Marker, queue_size=10)
+        self.marker_pub = rospy.Publisher("waypoint_markers", Marker, queue_size=10, latch=True)
 
         rospy.loginfo("Waiting for move_base server")
         self.move_base.wait_for_server(rospy.Duration(60))
@@ -70,7 +70,7 @@ class FollowWaypointsServer:
 
         for i, g in enumerate(goal.target_poses):
             status = GoalStatus()
-            status.goal_id.id = "{}".format(i)
+            status.goal_id.id = "{}_w{}".format(rospy.get_name(), i)
             status.status = GoalStatus.PENDING
             self._feedback.goal_status.status_list.append(status)
             self.markers.points.append(g.pose.position)
@@ -120,6 +120,7 @@ class FollowWaypointsServer:
                 GoalStatus.RECALLED,
             ]:
                 rospy.loginfo("Current goal index: {}".format(i))
+                rospy.loginfo("Result: {}".format(result))
 
                 # Abort the goals after the current one
                 self.update_goal_status(
