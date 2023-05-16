@@ -72,6 +72,7 @@ def create_goal(waypoint_list):
         pose.pose = waypoint
 
         g.goal.target_pose = pose
+        g.goal_id.id = w.get("id")
 
         goal.goal.append(g)
 
