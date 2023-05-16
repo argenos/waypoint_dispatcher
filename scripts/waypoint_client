@@ -6,7 +6,6 @@ import rospy
 from waypoint_dispatching.waypoint_client import waypoint_client
 
 if __name__ == "__main__":
-
     try:
         rospy.init_node("waypoint_client")
         result = waypoint_client()

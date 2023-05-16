@@ -43,10 +43,14 @@ class FollowWaypointsServer:
         self.path_tolerance = rospy.get_param(
             "move_base/TebLocalPlannerROS/xy_goal_tolerance"
         )
-        self.path_pub = rospy.Publisher("move_base_planned_path", Path, queue_size=10, latch=True)
+        self.path_pub = rospy.Publisher(
+            "move_base_planned_path", Path, queue_size=10, latch=True
+        )
 
         # Define a marker publisher.
-        self.marker_pub = rospy.Publisher("waypoint_markers", Marker, queue_size=10, latch=True)
+        self.marker_pub = rospy.Publisher(
+            "waypoint_markers", Marker, queue_size=10, latch=True
+        )
 
         rospy.loginfo("Waiting for move_base server")
         self.move_base.wait_for_server(rospy.Duration(60))
@@ -149,9 +153,7 @@ class FollowWaypointsServer:
         self.update_markers(idx, status)
         self.marker_pub.publish(self.markers)
 
-
     def send_move_base_goal(self, waypoint):
-
         goal = MoveBaseGoal()
         goal.target_pose.header.frame_id = self.frame
         goal.target_pose.header.stamp = rospy.Time.now()
