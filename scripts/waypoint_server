@@ -30,9 +30,6 @@ class FollowWaypointsServer:
             auto_start=False,
         )
 
-        self._feedback = FollowWaypointsFeedback()
-        self._result = FollowWaypointsResult()
-
         self.frame = rospy.get_param("~frame", "map")
         rospy.loginfo(self.frame)
 
@@ -58,6 +55,9 @@ class FollowWaypointsServer:
         rospy.loginfo("Ready!")
 
     def execute_cb(self, goal):
+        self._feedback = FollowWaypointsFeedback()
+        self._result = FollowWaypointsResult()
+
         # helper variables
         r = rospy.Rate(1)
         success = True
