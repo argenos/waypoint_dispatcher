@@ -78,6 +78,7 @@ class FollowWaypointsServer:
             self.markers.points.append(g.goal.target_pose.pose.position)
             self.markers.colors.append(marker_color)
 
+        self._as.publish_feedback(self._feedback)
         self.marker_pub.publish(self.markers)
 
         # Execute
@@ -98,26 +99,15 @@ class FollowWaypointsServer:
                 break
 
             # Change current goal status to active
-            rospy.loginfo("Executing next goal...")
-            stamp = rospy.Time.now()
-            self._feedback.goal_status.status_list[i].status = GoalStatus.ACTIVE
-            status.goal_id.stamp = stamp
-            self._feedback.goal_status.header.stamp = stamp
-            self.update_markers(i, GoalStatus.ACTIVE)
-            self._as.publish_feedback(self._feedback)
-            self.marker_pub.publish(self.markers)
+            rospy.loginfo("Executing goal: {}".format(status.goal_id.id))
+            self.publish_feedback(i, GoalStatus.ACTIVE)
 
             # Make move_base request
             result = self.send_move_base_goal(waypoint.goal)
 
-            # rospy.loginfo(result)
-            stamp = rospy.Time.now()
-            self._feedback.goal_status.status_list[i].status = result
-            status.goal_id.stamp = stamp
-            self._feedback.goal_status.header.stamp = stamp
-            self.update_markers(i, result)
-            self._as.publish_feedback(self._feedback)
-            self.marker_pub.publish(self.markers)
+            rospy.loginfo("Result: {}".format(result))
+
+            self.publish_feedback(i, result)
 
             if result in [
                 GoalStatus.PREEMPTED,
@@ -148,6 +138,17 @@ class FollowWaypointsServer:
         else:
             rospy.loginfo("%s: Failed" % self._action_name)
             self._as.set_aborted(self._result)
+
+    def publish_feedback(self, idx, status):
+        stamp = rospy.Time.now()
+        self._feedback.goal_status.status_list[idx].status = status
+        self._feedback.goal_status.status_list[idx].goal_id.stamp = stamp
+        self._feedback.goal_status.header.stamp = stamp
+        self._as.publish_feedback(self._feedback)
+
+        self.update_markers(idx, status)
+        self.marker_pub.publish(self.markers)
+
 
     def send_move_base_goal(self, waypoint):
 
