@@ -2,8 +2,6 @@ from __future__ import print_function
 
 import yaml
 
-from math import pi
-
 import rospy
 import actionlib
 from geometry_msgs.msg import Pose, Point, Quaternion, PoseStamped
@@ -63,8 +61,7 @@ def create_goal(waypoint_list):
         pose = PoseStamped()
         g = MoveBaseActionGoal()
 
-        orientation = [w.get("roll", 0), w.get("pitch", 0), w.get("yaw", 0)]
-        orientation = [x * pi / 180.0 for x in orientation]
+        orientation = [w.get("roll", 0.0), w.get("pitch", 0.0), w.get("yaw", 0.0)]
         yaw_deg = quaternion_from_euler(*orientation, axes="sxyz")
         q = Quaternion(*yaw_deg)
         waypoint = Pose(Point(w["x"], w["y"], w.get("z", 0.0)), q)
